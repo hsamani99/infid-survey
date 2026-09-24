@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>پرسشنامه</title>
+  <script src="https://unpkg.com/jspsych@8.2.2"></script>
+  <script src="https://unpkg.com/@jspsych/plugin-survey@4.0.0"></script>
+  <link rel="stylesheet" href="https://unpkg.com/jspsych@8.2.2/css/jspsych.css">
+  <link rel="stylesheet" href="https://unpkg.com/@jspsych/plugin-survey@4.0.0/css/survey.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap">
+  <style>
+    body { font-family:'Vazirmatn',Tahoma,sans-serif; background:#eef0f4; color:#1c1c1e; margin:0; }
+    .jspsych-display-element { font-family:'Vazirmatn',Tahoma,sans-serif; }
+    .jspsych-content-wrapper { max-width:680px; margin:0 auto; }
+    .jspsych-content { max-width:680px; }
+
+    .sd-root-modern{
+      direction:rtl;
+      --sjs-base-unit:8px;
+      --sjs-font-family:'Vazirmatn', Tahoma, sans-serif;
+      --sjs-font-size:16px;
+      --sjs-corner-radius:12px;
+      --sjs-primary-backcolor:#2f6fed;
+      --sjs-primary-backcolor-dark:#2258c8;
+    }
+    .sd-container-modern{ max-width:640px; margin:0 auto; }
+    .sd-body{ padding:14px 8px 8px; }
+
+    .q-prompt{
+      font-size:15px; color:#41505f; line-height:1.9;font-weight:700;
+      background:#f2f4f8; border:1px solid #e2e7ee; border-radius:10px;
+      padding:10px 14px; margin-bottom:14px;
+    }
+    /* full-screen block lead-in */
+    .q-lead{
+      font-size:20px; font-weight:600; line-height:2.1; color:#1c2733;
+      padding:24px 6px; text-align:center;
+    }
+    .sd-question__title{ font-size:20px; font-weight:600; line-height:2; margin-bottom:6px; }
+
+    /* vertical scale list */
+    .sd-selectbase{ display:flex; flex-direction:column; gap:8px; }
+    .sd-selectbase__item, .sd-root-modern .sd-item{
+      border:1px solid #dfe4ea; border-radius:10px;
+      padding:13px 16px; margin:0; background:#fff;
+      transition:background .12s, border-color .12s;
+    }
+    .sd-selectbase__item:hover{ background:#f0f6ff; border-color:#b9d2ff; }
+    .sd-item--checked, .sd-selectbase__item--checked, .sd-radio--checked{
+      background:#e7f0ff !important; border-color:#2f6fed !important;
+    }
+    .sd-item__control-label, .sd-item__decorator + span, .sv-string-viewer{ font-size:16px; line-height:1.7; }
+    .sd-item__decorator{ width:22px; height:22px; }
+
+    .sd-action-bar, .sd-footer{ justify-content:center; }
+    .sd-btn{ font-family:'Vazirmatn',Tahoma; font-size:16px; font-weight:600; padding:12px 40px; }
+    .sd-progress__text{ font-family:'Vazirmatn',Tahoma; }
+  </style>
+</head>
+<body></body>
+<script>
+// ======== SETTING: how many items per page (1 = one item per screen) ========
+const ITEMS_PER_PAGE = 1;
+
+// ---------- helpers ----------
+function toFa(n){ return String(n).replace(/[0-9]/g, d => '۰۱۲۳۴۵۶۷۸۹'[d]); }
+function nums(min,max){ const a=[]; for(let i=min;i<=max;i++) a.push({value:i,text:toFa(i)}); return a; }
+function pagesFrom(items, makeEls){
+  const pages=[];
+  for(let i=0;i<items.length;i+=ITEMS_PER_PAGE){
+    let els=[];
+    items.slice(i,i+ITEMS_PER_PAGE).forEach((txt,j)=>{ els=els.concat(makeEls(txt,i+j+1)); });
+    pages.push({elements:els});
+  }
+  return pages;
+}
+function anchored(rateValues, minDesc, maxDesc){
+  const c = rateValues.map(o=>({value:o.value, text:o.text}));
+  if(minDesc) c[0] = {value:rateValues[0].value, text:rateValues[0].text+" — "+minDesc};
+  if(maxDesc) c[rateValues.length-1] = {value:rateValues[rateValues.length-1].value, text:rateValues[rateValues.length-1].text+" — "+maxDesc};
+  return c;
+}
+// standalone info/lead-in screen
+function infoScreen(name, html, cls){
+  return { type:jsPsychSurvey, survey_json:{ completeText:"ادامه", showQuestionNumbers:false,
+    pages:[{elements:[{ type:"html", name:name, html:(cls?"<div class='"+cls+"'>"+html+"</div>":html) }]}] }};
+}
+// rating block = lead-in page + one-item-per-page section
+function ratingScale(name, prompt, items, rateValues, minDesc, maxDesc, reminder){
+  const choices = anchored(rateValues, minDesc, maxDesc);
+  const rem = reminder || prompt;
+  const lead = infoScreen(name+"_lead", prompt, "q-lead");
+  const sec = { type:jsPsychSurvey, survey_json:{
+    showQuestionNumbers:false, showProgressBar:"top",
+    completeText:"ادامه", pageNextText:"بعدی", pagePrevText:"قبلی",
+    pages: pagesFrom(items,(txt,n)=>[
+      { type:"html", name:name+"_ctx_"+n, html:"<div class='q-prompt'>"+rem+"</div>" },
+      { type:"radiogroup", name:name+"_"+n, title:txt, isRequired:true, choices:choices, colCount:1 }
+    ])
+  }};
+  return { timeline:[lead, sec] };
+}
+// choice block (descriptive options) = lead-in page + one-item-per-page section
+function choiceScale(name, prompt, items, choices, reminder){
+  const rem = reminder || prompt;
+  const lead = infoScreen(name+"_lead", prompt, "q-lead");
+  const sec = { type:jsPsychSurvey, survey_json:{
+    showQuestionNumbers:false, showProgressBar:"top",
+    completeText:"ادامه", pageNextText:"بعدی", pagePrevText:"قبلی",
+    pages: pagesFrom(items,(txt,n)=>[
+      { type:"html", name:name+"_ctx_"+n, html:"<div class='q-prompt'>"+rem+"</div>" },
+      { type:"radiogroup", name:name+"_"+n, title:txt, isRequired:true, choices:choices, colCount:1 }
+    ])
+  }};
+  return { timeline:[lead, sec] };
+}
+
+// ---------- rating value sets ----------
+const R7  = nums(1,7);
+const R9  = nums(1,9);
+const R05 = nums(0,5);
+const R010= nums(0,10);
+const Rcheat = [0,10,20,30,40,50,60,70,80,90,100].map(v=>({value:v,text:toFa(v)+"٪"}));
+
+const C_soiB = [1,2,3,4,5,6,7,8,9].map((v,i)=>({value:v, text:["۰","۱","۲","۳","۴","۵ تا ۶","۷ تا ۹","۱۰ تا ۱۹","۲۰ یا بیشتر"][i]}));
+const C_soiD = [1,2,3,4,5,6,7,8,9].map((v,i)=>({value:v, text:[
+  "هرگز","خیلی به‌ندرت","هر دو-سه ماه یک‌بار","ماهی یک‌بار","هر دو هفته یک‌بار",
+  "هفته‌ای یک‌بار","چند بار در هفته","تقریباً هر روز","روزی یک‌بار یا بیشتر"][i]}));
+
+// ---------- items ----------
+const traits = ["شجاع","توانایی رهبری","مصمم","مستقل","یاری‌رسان به دیگران","همدل","درک‌کنندهٔ دیگران","گرم و صمیمی",
+"زورگو","تهدیدکننده","سلطه‌جو","متکبر","ضعیف","مطیع","ترسو","مردد","اهل لاس زدن","باتجربهٔ جنسی","محافظه‌کار جنسی",
+"خوب لطیفه می‌گوید","دیگران را می‌خنداند","لطیفه‌های رکیک می‌گوید"];
+
+// ---------- init ----------
+const jsPsych = initJsPsych({
+  show_progress_bar:false,
+  on_finish:function(){
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxABh6DD0TYTVNFDI4IX_6hASTA7BDbEv_CJDyWwVJYtNqAlvirBAO_GqZXPZDwrRfz/exec";
+
+    const row = { timestamp: new Date().toISOString() };
+    jsPsych.data.get().values().forEach(trial=>{
+      if(trial.response && typeof trial.response === "object"){
+        for(const k in trial.response){
+          if(k.endsWith("_ctx_") || k.endsWith("_lead") || k.endsWith("_text")) continue; // skip empty context/lead fields
+          const v = trial.response[k];
+          if(v === null) continue;
+          row[k] = (v && typeof v === "object") ? JSON.stringify(v) : v;
+        }
+      }
+    });
+
+    navigator.sendBeacon(
+      SCRIPT_URL,
+      new Blob([JSON.stringify(row)], {type:"text/plain;charset=utf-8"})
+    );
+
+    document.body.innerHTML = "<div style='font-family:Vazirmatn,Tahoma;text-align:center;margin-top:80px;font-size:20px'>از شرکت شما سپاسگزاریم! پاسخ‌های شما ثبت شد.</div>";
+  }
+});
+
+let timeline = [];
+
+
+// ----- Captcha -----
+timeline.push({ type:jsPsychSurvey, survey_json:{ completeText:"ادامه", showQuestionNumbers:false, pages:[{elements:[
+  { type:"boolean", name:"captcha", title:"برای جلوگیری از پاسخ‌های خودکار، لطفاً تأیید کنید.", label:"من ربات نیستم.", isRequired:true }
+]}]}});
+
+// ----- Consent -----
+timeline.push({ type:jsPsychSurvey, survey_json:{ completeText:"ادامه", showQuestionNumbers:false, pages:[{elements:[
+  { type:"html", name:"consent_text", html:
+    "<h3>اطلاعات و رضایت‌نامه</h3>"+
+    "<p>شما به شرکت در یک پژوهش دعوت شده‌اید که توسط گروه پژوهشی «تکامل و شناخت اجتماعی» در دانشگاه ENS-PSL پاریس انجام می‌شود. این پژوهش شامل یک پرسشنامهٔ آنلاین دربارهٔ نگرش‌ها و باورهای اجتماعی در زمینهٔ روابط، جنسیت و زندگی روزمره است و حدود ۲۰ دقیقه زمان می‌برد.</p>"+
+    "<p>شرکت در این پژوهش داوطلبانه است. برخی پرسش‌ها به موضوعات شخصی مانند روابط و مسائل جنسی می‌پردازند؛ می‌توانید از پاسخ به هر پرسشی صرف‌نظر کنید و در هر زمان مطالعه را متوقف کنید. برای دریافت پرداخت از طریق Prolific، لطفاً پرسشنامه را کامل کنید و از طریق لینک تکمیل بازگردید.</p>"+
+    "<p>پاسخ‌های شما محرمانه نگه داشته می‌شوند و تنها برای اهداف پژوهشی استفاده می‌شوند. داده‌ها با شناسهٔ Prolific شما پیوند داده می‌شوند، به‌صورت ایمن ذخیره می‌شوند و تنها به‌صورت تجمعی گزارش می‌شوند.</p>"+
+    "<p>با انتخاب «موافقم»، تأیید می‌کنید که حداقل ۱۸ سال دارید، این اطلاعات را خوانده‌اید و با شرکت در این پژوهش موافقت می‌کنید.</p>" },
+  { type:"radiogroup", name:"consent", title:"آیا مایل به شرکت هستید؟", isRequired:true, choices:[
+    { value:"agree", text:"با شرکت در این پژوهش موافقم." },
+    { value:"decline", text:"مایل به شرکت نیستم." }
+  ]}
+]}]},
+  on_finish:function(data){ if(data.response && data.response.consent==="decline"){ jsPsych.abortExperiment("از وقت شما سپاسگزاریم. مطالعه پایان یافت."); } }
+});
+
+// ----- Demographics -----
+const sesChoices = [];
+for(let r=10;r>=1;r--){ sesChoices.push({value:r, text: r===10?"۱۰ — بالا (بهترین وضعیت)": r===1?"۱ — پایین (بدترین وضعیت)": toFa(r)}); }
+
+timeline.push({ type:jsPsychSurvey, survey_json:{ completeText:"ادامه", pageNextText:"بعدی", pagePrevText:"قبلی", showQuestionNumbers:false, pages:[
+  { elements:[
+    { type:"text", name:"dem_age", title:"سن شما به سال چند است؟", inputType:"number", isRequired:true },
+    { type:"radiogroup", name:"dem_gender", title:"جنسیت شما چیست؟", isRequired:true,
+      showOtherItem:true, otherText:"ترجیح می‌دهم خودم توصیف کنم", otherPlaceholder:"لطفاً توضیح دهید",
+      choices:[ {value:"woman",text:"زن"},{value:"man",text:"مرد"},{value:"nonbinary",text:"دگرباش (نان‌باینری)"},{value:"na",text:"ترجیح می‌دهم نگویم"} ]}
+  ]},
+  { elements:[
+    { type:"radiogroup", name:"dem_orient", title:"کدام گزینه گرایش جنسی شما را بهتر توصیف می‌کند؟", isRequired:true,
+      showOtherItem:true, otherText:"ترجیح می‌دهم خودم توصیف کنم", otherPlaceholder:"لطفاً توضیح دهید",
+      choices:[ {value:1,text:"دگرجنس‌گرا"},{value:2,text:"همجنس‌گرا"},{value:3,text:"دوجنس‌گرا"} ]},
+    { type:"radiogroup", name:"dem_relstatus", title:"وضعیت رابطهٔ عاطفی فعلی شما چیست؟", isRequired:true,
+      showOtherItem:true, otherText:"ترجیح می‌دهم خودم توصیف کنم", otherPlaceholder:"لطفاً توضیح دهید",
+      choices:[
+        {value:1,text:"مجرد و در حال حاضر بدون رابطه"},{value:2,text:"در حال قرار گذاشتن غیرجدی"},
+        {value:3,text:"در یک رابطهٔ متعهدانه، بدون زندگی مشترک"},{value:4,text:"زندگی مشترک با شریک زندگی"},
+        {value:5,text:"متأهل یا در پیوند مدنی"},{value:6,text:"جدا شده یا مطلقه"},{value:7,text:"بیوه"} ]}
+  ]},
+  { elements:[
+    { type:"radiogroup", name:"dem_edu", title:"بالاترین سطح تحصیلاتی که کامل کرده‌اید چیست؟", isRequired:true, choices:[
+      {value:1,text:"کمتر از دیپلم"},{value:2,text:"دیپلم دبیرستان"},{value:3,text:"آموزش فنی و حرفه‌ای"},
+      {value:4,text:"تحصیلات دانشگاهی ناتمام"},{value:5,text:"کارشناسی"},{value:6,text:"کارشناسی ارشد"},
+      {value:7,text:"دکتری یا تخصصی"},{value:8,text:"ترجیح می‌دهم نگویم"} ]},
+    { type:"radiogroup", name:"dem_ses", title:"نردبانی با ۱۰ پله را تصور کنید که نشان‌دهندهٔ جایگاه افراد در جامعه است. در بالا (۱۰) کسانی هستند که بهترین وضعیت را دارند (بیشترین پول، تحصیلات و مشاغل محترم) و در پایین (۱) کسانی که بدترین وضعیت را دارند. خود را روی کدام پله قرار می‌دهید؟", isRequired:true, choices:sesChoices }
+  ]}
+]},
+  on_finish:function(data){ if(data.response){ window.__gender=data.response.dem_gender; } }
+});
+
+// ----- Attention check -----
+timeline.push({ type:jsPsychSurvey, survey_json:{ completeText:"ادامه", showQuestionNumbers:false, pages:[{elements:[
+  { type:"comment", name:"attn_check", isRequired:true, title:
+    "تصور کنید در یک بعدازظهر آفتابی در پارک قدم می‌زنید. از کنار برکه‌ای کوچک، چند سگ در حال بازی و فردی که بستنی می‌فروشد می‌گذرید. برای اینکه نشان دهید با دقت می‌خوانید، لطفاً پرسش زیر را نادیده بگیرید و در کادر عبارت «من با دقت پاسخ می‌دهم» را بنویسید. برخی می‌گویند یک روز آفتابی در پارک بهترین راه برای آرامش است — آیا موافقید؟" }
+]}]}});
+
+// ================= JS intro + jealousy (one randomized unit; Cog/Emo shuffled inside) =================
+const jsIntro = infoScreen("js_intro",
+  "<p>اکنون به پرسش‌هایی دربارهٔ رابطهٔ عاطفی شما می‌پردازیم.</p>"+
+  "<p>لطفاً به فردی فکر کنید که با او یک رابطهٔ عاشقانه/عاطفی قوی دارید یا داشته‌اید: <b>شریک فعلی‌تان اگر دارید، یا یک شریک گذشته یا خیالی اگر مجرد هستید</b>. در سراسر این پرسشنامه، این فرد با <b>X</b> نشان داده می‌شود.</p>"+
+  "<p>لطفاً با انتخاب عدد مناسب برای هر گویه، پاسخ خود را مشخص کنید.</p>");
+
+const cog = ratingScale("JS_Cog", "چند وقت به چند وقت افکار زیر را دربارهٔ X دارید؟", [
+  "مشکوکم که X مخفیانه با فردی از جنس مخالف در ارتباط است.",
+  "نگرانم که فردی از جنس مخالف به دنبال X باشد.",
+  "مشکوکم که X ممکن است به کس دیگری جذب شده باشد.",
+  "مشکوکم که X ممکن است پشت سر من با فردی از جنس مخالف رابطهٔ جسمی داشته باشد.",
+  "فکر می‌کنم برخی افراد از جنس مخالف ممکن است به X علاقهٔ عاشقانه داشته باشند.",
+  "نگرانم که فردی از جنس مخالف در تلاش برای اغوای X باشد.",
+  "فکر می‌کنم X مخفیانه در حال شکل‌دادن یک رابطهٔ صمیمی با فردی از جنس مخالف است.",
+  "مشکوکم که X شیفتهٔ افراد جنس مخالف است."], R7, "هرگز", "همیشه", "چند وقت به چند وقت این فکر را دربارهٔ X دارید؟");
+
+const emo = ratingScale("JS_Emo", "چگونه از نظر احساسی به موقعیت‌های زیر واکنش نشان می‌دهید؟", [
+  "X به شما می‌گوید که فلان فرد از جنس مخالف چقدر خوش‌قیافه است.",
+  "X علاقه یا هیجان زیادی در گفت‌وگو با فردی از جنس مخالف نشان می‌دهد.",
+  "X به فردی از جنس مخالف لبخندی بسیار دوستانه می‌زند.",
+  "فردی از جنس مخالف دائماً در تلاش است به X نزدیک شود.",
+  "X با فردی از جنس مخالف لاس می‌زند.",
+  "فردی از جنس مخالف با X قرار می‌گذارد.",
+  "X فردی از جنس مخالف را در آغوش می‌گیرد و می‌بوسد.",
+  "X با فردی از جنس مخالف بسیار نزدیک کار می‌کند (در مدرسه یا محل کار)."], R7, "بسیار خشنود", "بسیار ناراحت", "از نظر احساسی چه واکنشی نشان می‌دهید؟");
+
+const jealousyUnit = { timeline: [jsIntro].concat(jsPsych.randomization.shuffle([cog, emo])) };
+
+// ----- Perceived cheating (16 items) -----
+const cheat = ratingScale("PInf", "افراد در اینکه چه چیزی خیانت محسوب می‌شود اختلاف نظر دارند. در صفحات بعد، برای هر رفتار ارزیابی می‌کنید که اگر فردی در یک رابطهٔ متعهدانه آن را با فردی از جنس مخالف غیر از شریک خود انجام دهد، تا چه اندازه خیانت است.", [
+  "دست در دست هم گرفتن","در آغوش گرفتن بیش از ۱۰ ثانیه","رقصیدن با هم","نشستن روی پای فرد دیگر",
+  "خریدن یا دریافت هدیه","رفتن به یک سفر جاده‌ای","گذراندن وقت زیاد با هم","اقامت در یک اتاق هتل",
+  "در میان گذاشتن رازها","ایجاد یک پیوند عاطفی عمیق","لاس زدن","حمایت مالی از فرد دیگر",
+  "لایک یا کامنت گذاشتن روی پست‌های شبکه‌های اجتماعی فردی جذاب","پیام خصوصی دادن به فردی جذاب",
+  "سکستینگ یا فرستادن عکس‌های تحریک‌کننده یا برهنه","بوسیدن روی لب"], Rcheat, "اصلاً خیانت نیست", "قطعاً خیانت است",
+  "اگر فردی در یک رابطهٔ متعهدانه رفتار زیر را با فردی از جنس مخالف غیر از شریک خود انجام دهد، تا چه اندازه خیانت است؟");
+
+// ----- Social trust (lead-in + 3 items) -----
+const trustLead = infoScreen("trust_lead",
+  "<p>چند پرسش کلی دربارهٔ اعتماد شما به مردم. لطفاً برای هر پرسش عددی را بین دو سر طیف انتخاب کنید.</p>", "q-lead");
+const trustItems = { type:jsPsychSurvey, survey_json:{ completeText:"ادامه", showProgressBar:"top", showQuestionNumbers:false,
+  pageNextText:"بعدی", pagePrevText:"قبلی", pages:[
+  { elements:[ { type:"radiogroup", name:"Trust_trust", isRequired:true, colCount:1,
+    title:"به‌طور کلی، آیا می‌گویید که به بیشتر مردم می‌توان اعتماد کرد، یا اینکه در برخورد با مردم باید بسیار محتاط بود؟",
+    choices:anchored(R010,"باید بسیار محتاط بود","به بیشتر مردم می‌توان اعتماد کرد") } ]},
+  { elements:[ { type:"radiogroup", name:"Trust_help", isRequired:true, colCount:1,
+    title:"آیا می‌گویید مردم معمولاً فقط به فکر خودشان هستند، یا اینکه بیشتر اوقات سعی می‌کنند کمک‌کننده باشند؟",
+    choices:anchored(R010,"فقط به فکر خودشان هستند","سعی می‌کنند کمک‌کننده باشند") } ]},
+  { elements:[ { type:"radiogroup", name:"Trust_fair", isRequired:true, colCount:1,
+    title:"آیا فکر می‌کنید بیشتر مردم اگر فرصت داشته باشند سعی می‌کنند از شما سوءاستفاده کنند، یا اینکه سعی می‌کنند منصف باشند؟",
+    choices:anchored(R010,"سعی می‌کنند سوءاستفاده کنند","سعی می‌کنند منصف باشند") } ]}
+]}};
+const trust = { timeline:[trustLead, trustItems] };
+
+// ----- Gender Role Attitudes (lead-in folds section intro + 12 items) -----
+const P_agree = "لطفاً میزان موافقت یا مخالفت خود را با جملهٔ زیر مشخص کنید.";
+const gra = ratingScale("GRA",
+  "در این بخش به دیدگاه‌های کلی شما دربارهٔ نقش‌های زنان و مردان در جامعه و روابط علاقه‌مندیم. در صفحات بعد، لطفاً مشخص کنید با هر جمله چقدر موافق یا مخالف هستید.",
+  [
+  "خانه‌داری به‌اندازهٔ کار کردن در برابر دستمزد رضایت‌بخش است.",
+  "هم شوهر و هم همسر باید در درآمد خانوار سهیم باشند.",
+  "در مجموع، مردان رهبران سیاسی بهتری نسبت به زنان هستند.",
+  "مردان معمولاً مدیران کسب‌وکار بهتری نسبت به زنان هستند.",
+  "اگر زنی بیشتر از شوهرش پول در بیاورد، احتمال بروز مشکل بیشتر است.",
+  "یک مادر شاغل می‌تواند به همان اندازهٔ مادری که کار نمی‌کند رابطه‌ای گرم و امن با فرزندانش برقرار کند.",
+  "کودک پیش‌دبستانی احتمالاً آسیب می‌بیند اگر مادرش کار کند.",
+  "به‌طور کلی، پدران به همان اندازهٔ مادران برای مراقبت از فرزندانشان مناسب‌اند.",
+  "مردان باید به‌اندازهٔ زنان مسئولیت خانه و فرزندان را بر عهده بگیرند.",
+  "رابطه معمولاً روان‌تر پیش می‌رود وقتی مرد پیشگام باشد.",
+  "بسیاری از زنان زمانی شادترند که تمرکز اصلی‌شان زندگی خانوادگی باشد.",
+  "زنان و مردان طبیعتاً برای انواع تا حدی متفاوتی از کار مناسب‌اند."], R7, "کاملاً مخالفم", "کاملاً موافقم", P_agree);
+
+// ----- Precarious Manhood (5 items) -----
+const pmb = ratingScale("PMB", P_agree, [
+  "نسبتاً آسان است که یک مرد جایگاه خود را به‌عنوان یک مرد از دست بدهد.",
+  "برخی پسرها هرچقدر هم بزرگ شوند، مرد نمی‌شوند.",
+  "دیگران اغلب زیر سؤال می‌برند که آیا یک مرد «مرد واقعی» است.",
+  "مردانگی تضمین‌شده نیست—می‌توان آن را از دست داد.",
+  "من هرگز از رایانه یا گوشی هوشمند استفاده نکرده‌ام."], R7, "کاملاً مخالفم", "کاملاً موافقم");
+
+// ----- Ambivalent Sexism (6 items, 0–5) -----
+const asi = ratingScale("ASI",
+  "در صفحات بعد، جملاتی دربارهٔ مردان، زنان و روابط آن‌ها می‌آید. لطفاً مشخص کنید با هر جمله چقدر موافق یا مخالف هستید.",
+  [
+  "زنان باید توسط مردان گرامی داشته و محافظت شوند.",
+  "مردان بدون زنان ناقص‌اند.",
+  "زنان در مقایسه با مردان معمولاً حساسیت اخلاقی برتری دارند.",
+  "زنان می‌کوشند با به‌دست‌آوردن کنترل بر مردان قدرت کسب کنند.",
+  "زنان مشکلاتی را که در محل کار دارند بزرگ‌نمایی می‌کنند.",
+  "وقتی زنان در یک رقابت منصفانه به مردان می‌بازند، معمولاً از تبعیض شکایت می‌کنند."], R05, "کاملاً مخالفم", "کاملاً موافقم", P_agree);
+
+// ----- Blurring: BGL (6) + TGH (7) as one unit -----
+const bgl = ratingScale("BGL", P_agree, [
+  "والدین باید از پوشاندن لباس‌های دخترانه به پسر خودداری کنند.",
+  "اجازه دادن به کودک برای پوشیدن لباس جنس مخالف او را دچار سردرگمی می‌کند.",
+  "اگر یک همکار مرد با دامن سر کار بیاید احساس ناراحتی می‌کنم.",
+  "وقتی نمی‌توانم تشخیص دهم کسی مرد است یا زن، آزرده می‌شوم.",
+  "پوشیدن لباس جنس مخالف در خلوت قابل قبول است اما در ملأعام نه.",
+  "هیچ چیز عجیبی نیست اگر زنی طوری لباس بپوشد که او را مرد بپندارند."], R7, "کاملاً مخالفم", "کاملاً موافقم");
+const tgh = ratingScale("TGH", P_agree, [
+  "اگر یک فرد تراجنسیتی از من بخواهد هم‌خانه‌ام شود، ترجیح می‌دهم رد کنم.",
+  "اگر بدانم کسی تراجنسیتی است، همچنان برای دوستی با آن فرد گشوده خواهم بود.",
+  "اگر یک فرد تراجنسیتی خود را زن بداند، باید حق ازدواج با یک مرد را داشته باشد.",
+  "اگر مرد به دنیا آمده باشی، هیچ کاری آن را تغییر نمی‌دهد.",
+  "پذیرش گستردهٔ همجنس‌گرایی نهاد خانواده را تضعیف می‌کند.",
+  "وقتی جامعه‌ای همجنس‌گرایی را بپذیرد، سایر معیارهای اخلاقی نیز فرو می‌ریزند.",
+  "برخی اعمال همجنس‌گرایانه حتی میان بزرگسالان رضایت‌مند از نظر اخلاقی پست‌کننده‌اند."], R7, "کاملاً مخالفم", "کاملاً موافقم");
+const blurUnit = { timeline:[bgl, tgh] };
+
+// ----- Gender Essentialism (6 items) -----
+const gess = ratingScale("GESS", P_agree, [
+  "تفاوت‌های میان زنان و مردان ناشی از ذات‌های بنیادین متفاوت است.",
+  "وقتی بدانید کسی زن است یا مرد، می‌توانید چیزهای زیادی دربارهٔ او پیش‌بینی کنید.",
+  "زنان شباهت‌های زیادی با یکدیگر دارند، همان‌طور که مردان چنین‌اند.",
+  "جنسیتِ یک فرد بخشی از ذات بنیادین اوست، و این ذات هرچه هم بکند تغییر نمی‌کند.",
+  "تفاوت‌های میان زنان و مردان از اوایل زندگی آغاز می‌شود و در طول رشد تغییر نمی‌کند.",
+  "راه‌های قابل‌قبول متعددی برای تعریف معنای زن یا مرد بودن وجود دارد."], R7, "کاملاً مخالفم", "کاملاً موافقم");
+
+// ----- Trait desirability (22 traits each) -----
+const men   = ratingScale("MEN",   "در صفحات بعد، به نظر شما امروزه چقدر مطلوب است که یک «مرد» هر ویژگی را داشته باشد یا نشان دهد؟", traits, R9, "بسیار نامطلوب", "بسیار مطلوب", "به نظر شما، برای یک «مرد» داشتن ویژگی زیر چقدر مطلوب یا نامطلوب است؟");
+const women = ratingScale("WOMEN", "در صفحات بعد، به نظر شما امروزه چقدر مطلوب است که یک «زن» هر ویژگی را داشته باشد یا نشان دهد؟", traits, R9, "بسیار نامطلوب", "بسیار مطلوب", "به نظر شما، برای یک «زن» داشتن ویژگی زیر چقدر مطلوب یا نامطلوب است؟");
+
+// ---- randomize the main blocks ----
+const scales = jsPsych.randomization.shuffle([jealousyUnit, cheat, trust, gra, pmb, asi, blurUnit, gess, men, women]);
+timeline = timeline.concat(scales);
+
+// ----- women-only reputation block (Intro_rep + wom_rep) -----
+const repIntro = infoScreen("rep_intro",
+  "<p>پرسش‌های بعدی دربارهٔ این است که یک شریک عاطفی ممکن است شما را چگونه ببیند. به فردی فکر کنید که با او یک رابطهٔ عاشقانه/عاطفی قوی دارید یا داشته‌اید. جملات بعدی چیزهایی را توصیف می‌کنند که یک فرد ممکن است در زندگی عاطفی و اجتماعی خود به آن شناخته شود یا انجام دهد. <b>لطفاً تصور کنید اگر هر یک دربارهٔ شما صدق می‌کرد، این فرد شما را چگونه می‌دید.</b></p>");
+const repItems = ratingScale("wom_rep", "تصور کنید شریک عاطفی‌تان مورد زیر را دربارهٔ شما می‌دانست. در نگاه او، این موضوع چگونه بر میزان مطلوبیت شما به‌عنوان یک شریک بلندمدت تأثیر می‌گذاشت؟", [
+  "شما اغلب شریک عوض می‌کنید","بدون آغاز یک رابطهٔ جدی با کسی می‌خوابید","لباس‌های تحریک‌کننده می‌پوشید",
+  "شناخته‌شدن به داشتن تماس‌های جنسی متعدد","شما به‌عنوان کسی شناخته می‌شوید که به‌راحتی می‌توان با او خوابید",
+  "شما اهل لاس زدن هستید","نمی‌توانید امیال جنسی خود را کنترل کنید","در رفتار خود محجوب یا محتاط نیستید",
+  "به شریک خود وفادار نیستید"], R7, "مطلوبیت را به‌شدت کاهش می‌دهد", "مطلوبیت را به‌شدت افزایش می‌دهد",
+  "این موضوع چگونه بر مطلوبیت شما به‌عنوان یک شریک بلندمدت تأثیر می‌گذاشت؟");
+timeline.push({ timeline:[repIntro, repItems], conditional_function:function(){ return window.__gender==="woman"; } });
+
+// ----- Partner reference -----
+timeline.push({ type:jsPsychSurvey, survey_json:{ completeText:"ادامه", showQuestionNumbers:false, pages:[{elements:[
+  { type:"radiogroup", name:"dem_Xref", isRequired:true, title:"پیش‌تر، برخی پرسش‌ها دربارهٔ فردی به نام X بودند. هنگام پاسخ به آن پرسش‌ها، چه کسی را در ذهن داشتید؟", choices:[
+    {value:1,text:"شریک فعلی‌ام"},{value:2,text:"یک شریک گذشته"},{value:3,text:"یک شریک خیالی یا فرضی"},{value:4,text:"ترجیح می‌دهم نگویم"} ]}
+]}]}});
+
+// ----- SOI-R -----
+timeline.push(choiceScale("SOI_B", "لطفاً صادقانه به پرسش زیر دربارهٔ رفتار جنسی خود پاسخ دهید.", [
+  "در ۱۲ ماه گذشته با چند شریک متفاوت رابطهٔ جنسی داشته‌اید؟",
+  "با چند شریک متفاوت تنها در یک نوبت (و فقط همان یک بار) رابطهٔ جنسی داشته‌اید؟",
+  "با چند شریک متفاوت بدون داشتن علاقه به یک رابطهٔ متعهدانهٔ بلندمدت رابطهٔ جنسی داشته‌اید؟"], C_soiB));
+
+timeline.push(ratingScale("SOI_A", P_agree, [
+  "رابطهٔ جنسی بدون عشق اشکالی ندارد.",
+  "می‌توانم تصور کنم که با شرکای مختلف رابطهٔ جنسی «گذری» داشته باشم و از آن راحت باشم و لذت ببرم.",
+  "نمی‌خواهم با کسی رابطهٔ جنسی داشته باشم مگر اینکه مطمئن باشم رابطهٔ بلندمدت و جدی خواهیم داشت."], R9, "کاملاً مخالفم", "کاملاً موافقم"));
+
+timeline.push(choiceScale("SOI_D", "لطفاً مشخص کنید مورد زیر چند وقت به چند وقت برای شما رخ می‌دهد.", [
+  "چند وقت به چند وقت دربارهٔ داشتن رابطهٔ جنسی با کسی که با او در یک رابطهٔ عاطفی متعهدانه نیستید خیال‌پردازی می‌کنید؟",
+  "چند وقت به چند وقت هنگام در ارتباط بودن با کسی که با او در یک رابطهٔ متعهدانه نیستید، برانگیختگی جنسی را تجربه می‌کنید؟",
+  "در زندگی روزمره، چند وقت به چند وقت خیال‌پردازی‌های خودجوش دربارهٔ داشتن رابطهٔ جنسی با کسی که تازه ملاقات کرده‌اید دارید؟"], C_soiD));
+
+jsPsych.run(timeline);
+</script>
+</html>
