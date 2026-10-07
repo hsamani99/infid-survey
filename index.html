@@ -67,9 +67,7 @@ const ITEMS_PER_PAGE = 1;
 function toFa(n){ return String(n).replace(/[0-9]/g, d => '۰۱۲۳۴۵۶۷۸۹'[d]); }
 function nums(min,max){ const a=[]; for(let i=min;i<=max;i++) a.push({value:i,text:toFa(i)}); return a; }
 function pagesFrom(items, makeEls){
-  // keep each item's ORIGINAL 1-based number (stable data columns)…
   let indexed = items.map((txt,i)=>({txt, n:i+1}));
-  // …but shuffle the order they're shown in (per participant)
   indexed = jsPsych.randomization.shuffle(indexed);
   const pages=[];
   for(let i=0;i<indexed.length;i+=ITEMS_PER_PAGE){
@@ -90,8 +88,7 @@ function infoScreen(name, html, cls){
   return { type:jsPsychSurvey, survey_json:{ completeText:"ادامه", showQuestionNumbers:false,
     pages:[{elements:[{ type:"html", name:name, html:(cls?"<div class='"+cls+"'>"+html+"</div>":html) }]}] }};
 }
-
-
+// rating block = lead-in page + items (prompt bar repeats above EACH item)
 function ratingScale(name, prompt, items, rateValues, minDesc, maxDesc, reminder, perPage){
   const choices = anchored(rateValues, minDesc, maxDesc);
   const rem = reminder || prompt;
@@ -113,9 +110,8 @@ function ratingScale(name, prompt, items, rateValues, minDesc, maxDesc, reminder
     completeText:"ادامه", pageNextText:"بعدی", pagePrevText:"قبلی",
     pages: pages
   }};
-    return { timeline: prompt ? [lead, sec] : [sec] };
+  return { timeline: prompt ? [lead, sec] : [sec] };
 }
-
 // choice block (descriptive options) = lead-in page + one-item-per-page section
 function choiceScale(name, prompt, items, choices, reminder){
   const rem = reminder || prompt;
@@ -138,15 +134,11 @@ const R05 = nums(0,5);
 const R010= nums(0,10);
 const Rcheat = [0,10,20,30,40,50,60,70,80,90,100].map(v=>({value:v,text:toFa(v)+"٪"}));
 
-// fully-labeled 7-point agreement (GRA, PMB, BGL, TGH, GESS)
+// fully-labeled 7-point agreement (GRA, PMB, ASI, BGL, TGH, GESS)
 const R7agree = [
   {value:1,text:"۱ — کاملاً مخالفم"},{value:2,text:"۲ — مخالفم"},{value:3,text:"۳ — تا حدی مخالفم"},
   {value:4,text:"۴ — نه موافق، نه مخالف"},{value:5,text:"۵ — تا حدی موافقم"},{value:6,text:"۶ — موافقم"},
   {value:7,text:"۷ — کاملاً موافقم"}];
-// fully-labeled 6-point agreement (ASI)
-const R05agree = [
-  {value:0,text:"۰ — کاملاً مخالفم"},{value:1,text:"۱ — تا حدی مخالفم"},{value:2,text:"۲ — کمی مخالفم"},
-  {value:3,text:"۳ — کمی موافقم"},{value:4,text:"۴ — تا حدی موافقم"},{value:5,text:"۵ — کاملاً موافقم"}];
 // fully-labeled 7-point affect (JS_Emo)
 const R7emo = [
   {value:1,text:"۱ — بسیار خشنود"},{value:2,text:"۲ — خشنود"},{value:3,text:"۳ — تا حدی خشنود"},
@@ -178,6 +170,11 @@ const traits = ["با دل و جرأت","توانایی رهبری بالا","م
 "ریاست طلب","مرعوب کننده","سلطه‌جو","مغرور","نازک نارنجی","مطیع","کم جرأت","مُردّد/دچار تردید","اهل لاس زدن","باتجربه در رابطه‌ی جنسی","محتاط در روابط جنسی",
 "خوب جوک/لطیفه بگوید","دیگران را بخنداند","بتواند جمع را با شوخی در دست بگیرد"];
 
+// ---------- setup vars (declared BEFORE init so on_finish can see them) ----------
+const startTime = Date.now();
+const participantID = "P-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2,6);
+const lotteryCode = "INF-" + Date.now().toString(36).toUpperCase().slice(-4) + "-" + Math.random().toString(36).slice(2,6).toUpperCase();
+
 // ---------- init ----------
 const jsPsych = initJsPsych({
   show_progress_bar:true,
@@ -186,11 +183,18 @@ const jsPsych = initJsPsych({
   on_finish:function(){
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxABh6DD0TYTVNFDI4IX_6hASTA7BDbEv_CJDyWwVJYtNqAlvirBAO_GqZXPZDwrRfz/exec";
 
-    const row = { timestamp: new Date().toISOString() };
+    const row = {
+      timestamp: new Date().toISOString(),
+      pid: participantID,
+      duration_min: ((Date.now() - startTime) / 60000).toFixed(1),
+      lottery_code: lotteryCode,
+      user_agent: navigator.userAgent,
+      screen_w: window.screen.width
+    };
     jsPsych.data.get().values().forEach(trial=>{
       if(trial.response && typeof trial.response === "object"){
         for(const k in trial.response){
-          if(k.endsWith("_ctx_") || k.endsWith("_lead") || k.endsWith("_text")) continue; // skip empty context/lead fields
+          if(k.endsWith("_ctx_") || k.endsWith("_lead") || k.endsWith("_text")) continue;
           const v = trial.response[k];
           if(v === null) continue;
           row[k] = (v && typeof v === "object") ? JSON.stringify(v) : v;
@@ -208,6 +212,7 @@ const jsPsych = initJsPsych({
 });
 
 let timeline = [];
+jsPsych.data.addProperties({ lottery_code: lotteryCode });
 
 // ----- Consent -----
 timeline.push({ type:jsPsychSurvey, survey_json:{ completeText:"ادامه", showQuestionNumbers:false, pages:[{elements:[
@@ -231,7 +236,6 @@ timeline.push({ type:jsPsychSurvey, survey_json:{ completeText:"ادامه", sho
 timeline.push({ type:jsPsychSurvey, survey_json:{ showQuestionNumbers:false,
   pageNextText:"بعدی", pagePrevText:"قبلی", completeText:"متوجه شدم، شروع پرسشنامه",
   pages:[
-  // --- Page 1: the three points ---
   { elements:[
     { type:"html", name:"instructions_points", html:
       "<h3>چند نکته پیش از شروع</h3>"+
@@ -239,7 +243,6 @@ timeline.push({ type:jsPsychSurvey, survey_json:{ showQuestionNumbers:false,
       "<p style='line-height:2'>💬 <b>آنچه واقعاً فکر می‌کنید را پاسخ دهید.</b> هیچ پاسخِ درست یا غلطی وجود ندارد. ما به نظر <i>واقعی</i> شما علاقه‌مندیم، حتی اگر با آنچه دیگران می‌پسندند فرق داشته باشد. پاسخ‌های شما کاملاً ناشناس است، پس با خیال راحت صادق باشید.</p>"+
       "<p style='line-height:2'>🎁 <b>پرسشنامه را کامل کنید.</b> برای واجد شرایط بودن در قرعه‌کشیِ هدیه، لازم است پرسشنامه را تا انتها و با دقت کامل کنید.</p>" }
   ]},
-  // --- Page 2: the answering guide ---
   { elements:[
     { type:"html", name:"instructions_guide", html:
       "<h4>راهنمای پاسخ‌دهی</h4>"+
@@ -259,7 +262,7 @@ timeline.push({ type:jsPsychSurvey, survey_json:{ completeText:"ادامه", sho
     "تصور کنید در یک بعدازظهر آفتابی در پارک قدم می‌زنید. از کنار برکه‌ای کوچک، چند سگ در حال بازی و فردی که بستنی می‌فروشد می‌گذرید. برای اینکه نشان دهید با دقت می‌خوانید، لطفاً پرسش زیر را نادیده بگیرید و در کادر عبارت «من با دقت پاسخ می‌دهم» را بنویسید. برخی می‌گویند یک روز آفتابی در پارک بهترین راه برای آرامش است — آیا موافقید؟" }
 ]}]}});
 
-// ================= JS intro + jealousy (one randomized unit; Cog/Emo shuffled inside) =================
+// ================= JS intro + jealousy =================
 const jsIntro = infoScreen("js_intro",
   "<p>اکنون به پرسش‌هایی دربارهٔ رابطهٔ عاطفی شما می‌پردازیم.</p>"+
   "<p>لطفاً به فردی فکر کنید که با او یک رابطهٔ عاشقانه/عاطفی قوی دارید یا داشته‌اید: <b>شریک فعلی‌تان اگر در یک رابطه هستید، یا یک شریک در گذشته یا یک شریک فرضی</b>. در سراسر این پرسشنامه، این فرد با <b>X</b> نشان داده می‌شود.</p>"+
@@ -294,7 +297,7 @@ const emo = ratingScale("JS_Emo", "هر یک از موقعیت‌های زیر �
 
 const jealousyUnit = { timeline: [jsIntro, xref].concat(jsPsych.randomization.shuffle([cog, emo])) };
 
-// ----- Perceived cheating (16 items) -----
+// ----- Perceived cheating -----
 const cheat = ratingScale("PInf", "افراد در اینکه چه چیزی خیانت محسوب می‌شود اختلاف نظر دارند. در صفحات بعد، برای هر رفتار ارزیابی می‌کنید که اگر فردی در یک رابطهٔ متعهدانه آن را با فردی از جنس مخالف، غیر از شریک خود انجام دهد، تا چه اندازه آن رفتار خیانت محسوب می‌شود.", [
   "دست یکدیگر را گرفتن","در آغوش گرفتن بیش از ۱۰ ثانیه","رقصیدن با هم","نشستن روی پای فرد دیگر",
   "خریدن یا دریافت هدیه","رفتن به یک سفر جاده‌ای","گذراندن وقت زیاد با هم","اقامت در یک اتاق در هتل",
@@ -303,7 +306,7 @@ const cheat = ratingScale("PInf", "افراد در اینکه چه چیزی خی
   "پیام جنسی یا فرستادن عکس‌های تحریک‌کننده یا برهنه","بوسیدن روی لب"], Rcheat, "اصلاً خیانت نیست", "قطعاً خیانت است",
   "از نظر شما اگر فردی در یک رابطهٔ متعهدانه رفتار زیر را با فردی از جنس مخالف غیر از شریک خود انجام دهد، تا چه اندازه خیانت است؟");
 
-// ----- Social trust (lead-in + 3 items, order shuffled) -----
+// ----- Social trust -----
 const trustLead = infoScreen("trust_lead",
   "<p>در این بخش چند پرسش کلی دربارهٔ اعتماد به مردم از شما پرسیده می‌شود. لطفاً برای هر پرسش عددی را روی طیف متناسب با نظرِ خود انتخاب کنید.</p>", "q-lead");
 const trustItems = { type:jsPsychSurvey, survey_json:{ completeText:"ادامه", showProgressBar:"top", showQuestionNumbers:false,
@@ -320,8 +323,8 @@ const trustItems = { type:jsPsychSurvey, survey_json:{ completeText:"ادامه"
 ]) }};
 const trust = { timeline:[trustLead, trustItems] };
 
-// ----- Gender Role Attitudes (12 items) -----
-const P_agree = "لطفاً میزان موافقت یا مخالفت خود را با هر جمله در بخش بعدی مشخص کنید.";
+// ----- Gender Role Attitudes -----
+const P_agree = "لطفاً میزان موافقت یا مخالفت خود را با هر جمله مشخص کنید.";
 const gra = ratingScale("GRA",
   "در بخش بعد، لطفاً مشخص کنید با هر جمله چقدر موافق یا مخالف هستید.",
   [
@@ -338,7 +341,7 @@ const gra = ratingScale("GRA",
   "بسیاری از زنان زمانی شادترند که تمرکز اصلی‌شان زندگی خانوادگی باشد.",
   "زنان و مردان طبیعتاً برای انواع تا حدی متفاوتی از کار مناسب‌اند."], R7agree, "", "", P_agree);
 
-// ----- Precarious Manhood (5 items) -----
+// ----- Precarious Manhood -----
 const pmb = ratingScale("PMB", P_agree, [
   "نسبتاً آسان است که یک مرد جایگاه خود را به‌عنوان یک مردِ واقعی از دست بدهد.",
   "برخی پسرها هرچقدر هم بزرگ شوند، مرد نمی‌شوند.",
@@ -346,7 +349,7 @@ const pmb = ratingScale("PMB", P_agree, [
   "مردانگی تضمین‌شده نیست—می‌توان آن را از دست داد.",
   "من هرگز از رایانه یا گوشی هوشمند استفاده نکرده‌ام."], R7agree, "", "", P_agree);
 
-// ----- Ambivalent Sexism (6 items, 0–5) -----
+// ----- Ambivalent Sexism -----
 const asi = ratingScale("ASI",
   "در بخش بعد، جملاتی دربارهٔ مردان، زنان و روابط آن‌ها می‌آید. لطفاً مشخص کنید با هر جمله چقدر موافق یا مخالف هستید.",
   [
@@ -357,24 +360,23 @@ const asi = ratingScale("ASI",
   "زنان مشکلاتی را که در محل کار دارند بزرگ‌نمایی می‌کنند.",
   "وقتی زنان در یک رقابت منصفانه به مردان می‌بازند، معمولاً از تبعیض شکایت می‌کنند."], R7agree, "", "", P_agree);
 
-// ----- Blurring: BGL (7) + TGH (7) as one unit -----
+// ----- Blurring: BGL (6) + TGH (7) -----
 const bgl = ratingScale("BGL", P_agree, [
-  "والدین باید از پوشاندن لباس‌های دخترانه به پسر خودداری کنند.",
-  "اجازه دادن به کودک برای پوشیدن لباس جنس مخالف او را دچار سردرگمی می‌کند.",
+  "والدین باید از پوشاندن لباس‌های دخترانه به یک پسر خودداری کنند.",
   "اگر یک همکار مرد با دامن سر کار بیاید احساس ناراحتی می‌کنم.",
   "وقتی نمی‌توانم تشخیص دهم کسی مرد است یا زن، آزرده می‌شوم.",
   "والدینِ یک دختر، نباید لباس‌های پسرانه به او بپوشانند.",
-  "پوشیدن لباس جنس مخالف در خلوت قابل قبول است اما در ملأعام نه.",
-  "هیچ چیز عجیبی نیست اگر زنی طوری لباس بپوشد که او را مرد تصور کنند."], R7agree, "", "", P_agree);
+  "پوشیدن لباسِ جنسِ مخالف در ملأعام قابل قبول نیست.",
+  "اشکالی ندارد اگر یک زن ظاهر و سبکِ خود را طوری انتخاب کند که شبیه یک مرد به نظر برسد."], R7agree, "", "", P_agree);
 
-  const tghLead = infoScreen("tgh_lead",
+const tghLead = infoScreen("tgh_lead",
   "<p style='line-height:2'>در بخش بعد چند اصطلاح به کار رفته است. برای اینکه همه‌ی افراد با برداشت یکسان پاسخ دهند، معنای کوتاهِ آن‌ها را می‌آوریم:</p>"+
   "<ul style='line-height:2.1;text-align:right;padding-right:20px'>"+
     "<li><b>فرد تِرنس (ترنسجندر):</b> کسی که احساس می‌کند جنسیتِ واقعی‌اش با جنسیتی که هنگام تولد (بر اساس بدنش) به او نسبت داده شده یکی نیست؛ برای مثال، فردی که هنگام تولد پسر در نظر گرفته شده اما خود را زن می‌داند، یا برعکس.</li>"+
     "<li><b>همجنس‌گرایی:</b> داشتن گرایش عاطفی یا جنسی به افرادِ هم‌جنسِ خود.</li>"+
   "</ul>"+
   "<p style='line-height:2;color:#41505f;font-size:14px'>این توضیحات فقط برای روشن‌شدن معناست و به معنای تأیید یا رد آن‌ها نیست.</p>", "");
-  
+
 const tgh = ratingScale("TGH", P_agree, [
   "اگر یک فردِ تِرنس (Trans) از من بخواهد هم‌خانه‌ام شود، ترجیح می‌دهم رد کنم.",
   "اگر بدانم کسی تِرنس (Trans) است، همچنان حاضرم با او دوست شوم.",
@@ -383,9 +385,9 @@ const tgh = ratingScale("TGH", P_agree, [
   "پذیرش گستردهٔ همجنس‌گرایی نهاد خانواده را تضعیف می‌کند.",
   "وقتی جامعه‌ای همجنس‌گرایی را بپذیرد، سایر معیارهای اخلاقی نیز فرو می‌ریزند.",
   "برخی رفتارهای همجنس‌گرایانه، حتی میان بزرگسالانی که با رضایت خودشان انجامش می‌دهند، از نظر اخلاقی پَست است."], R7agree, "", "", P_agree);
-const blurUnit = { timeline:[bgl, tghLead , tgh] };
+const blurUnit = { timeline:[bgl, tghLead, tgh] };
 
-// ----- Gender Essentialism (6 items) -----
+// ----- Gender Essentialism -----
 const gess = ratingScale("GESS", P_agree, [
   "تفاوت‌های میان زنان و مردان ناشی از ذات‌های بنیادین متفاوت است.",
   "وقتی بدانید کسی زن است یا مرد، می‌توانید چیزهای زیادی دربارهٔ او پیش‌بینی کنید.",
@@ -394,13 +396,11 @@ const gess = ratingScale("GESS", P_agree, [
   "تفاوت‌های میان زنان و مردان از اوایل زندگی آغاز می‌شود و در طول رشد تغییر نمی‌کند.",
   "زن بودن و مرد بودن را می‌توان به شکل‌های مختلف و قابل‌قبولی تعریف کرد."], R7agree, "", "", P_agree);
 
-// ----- Trait desirability (22 traits each) -----
+// ----- Trait desirability (3 per page, prompt above each item) -----
 const men   = ratingScale("MEN",   "در صفحات بعد، مشخص کنید که به نظر شما امروزه چقدر مطلوب است که یک «<b>مرد</b>» هر ویژگی را داشته باشد؟", traits, R9trait, "", "", "به نظر شما، برای یک «<b>مرد</b>» داشتن ویژگی زیر چقدر مطلوب یا نامطلوب است؟", 3);
 const women = ratingScale("WOMEN", "در صفحات بعد، مشخص کنید که به نظر شما امروزه چقدر مطلوب است که یک «<b>زن</b>» هر ویژگی را داشته باشد؟", traits, R9trait, "", "", "به نظر شما، برای یک «<b>زن</b>» داشتن ویژگی زیر چقدر مطلوب یا نامطلوب است؟", 3);
 
-// ----- Reputation block (asked of everyone for now) -----
-// ----- Reputation block (asked of everyone for now) -----
-// Two intro pages, then items (ratingScale lead suppressed via empty prompt)
+// ----- Reputation block (two intro pages, then items) -----
 const repIntro = { type:jsPsychSurvey, survey_json:{ showQuestionNumbers:false,
   pageNextText:"بعدی", pagePrevText:"قبلی", completeText:"ادامه",
   pages:[
@@ -426,13 +426,12 @@ const repItems = ratingScale("wom_rep", "",
 
 const repUnit = { timeline:[repIntro, repItems] };
 
-
 // ---- randomize the main blocks ----
 const scales = jsPsych.randomization.shuffle([jealousyUnit, cheat, trust, gra, pmb, asi, blurUnit, gess, men, women, repUnit]);
 timeline = timeline.concat(scales);
 
 // ----- SOI-R (attitudes only) -----
-timeline.push(ratingScale("SOI_A", "لطفاً میزان موافقت یا مخالفت خود را با جملهٔ زیر مشخص کنید.", [
+timeline.push(ratingScale("SOI_A", P_agree, [
   "رابطهٔ جنسی بدون عشق اشکالی ندارد.",
   "می‌توانم تصور کنم که با شرکای مختلف رابطهٔ جنسی «گذری» داشته باشم و از آن راحت باشم و لذت ببرم.",
   "نمی‌خواهم با کسی رابطهٔ جنسی داشته باشم مگر اینکه مطمئن باشم رابطهٔ بلندمدت و جدی خواهیم داشت."], R9agree, "", ""));
@@ -477,9 +476,6 @@ timeline.push({ type:jsPsychSurvey, survey_json:{ completeText:"ادامه", pag
 });
 
 // ----- Optional lottery -----
-const lotteryCode = "INF-" + Date.now().toString(36).toUpperCase().slice(-4) + "-" + Math.random().toString(36).slice(2,6).toUpperCase();
-jsPsych.data.addProperties({ lottery_code: lotteryCode });
-
 timeline.push({ type:jsPsychSurvey, survey_json:{ completeText:"پایان و ثبت پاسخ‌ها", showQuestionNumbers:false, pages:[{elements:[
   { type:"html", name:"lottery_intro", html:
     "<p style='line-height:2'>🎁 برای شرکت در <b>قرعه‌کشیِ هدیه</b>، کافی است یک راه ارتباطی (ایمیل، آیدی تلگرام یا اینستاگرام) در کادر زیر وارد کنید تا در صورت برنده‌شدن با شما تماس بگیریم.</p>" },
